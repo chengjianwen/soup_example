@@ -129,6 +129,7 @@ typedef struct
 {
     SoupServer  *server;
     SoupMessage *msg;
+    guint        timeout_id;
 } SoupServerInfo;
 
 gboolean Jpeger (gpointer data)
@@ -176,9 +177,9 @@ gboolean Jpeger (gpointer data)
 void MjpegHandlerFinished (SoupMessage *msg,
                            gpointer     user_data)
 {
-    guint *timeout_id = (guint *)user_data;
-    g_source_remove (*timeout_id);
-    free (timeout_id);
+    SoupServerInfo *info= (SoupServerInfo *)user_data;
+    g_source_remove (info->timeout_id);
+    free (info);
 }
 
 void MjpegHandler (SoupServer        *server,
@@ -197,10 +198,9 @@ void MjpegHandler (SoupServer        *server,
     SoupServerInfo *info = g_malloc (sizeof (SoupServerInfo));
     info->server = server;
     info->msg = msg;
-    guint *timeout_id = g_malloc (sizeof (guint));
-    *timeout_id = g_timeout_add (1000,
-                                 Jpeger,
-                                 info);
+    info->timeout_id = g_timeout_add (1000,
+                                      Jpeger,
+                                      info);
     g_signal_connect (msg, "finished",
                       G_CALLBACK (MjpegHandlerFinished),
                       timeout_id);
