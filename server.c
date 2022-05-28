@@ -64,7 +64,6 @@ void ImageHandler (SoupServer        *server,
                                SOUP_MEMORY_TAKE,
 	                       body,
                                length);
-
     // clean up
     printf ("image request.\n");
 }
@@ -201,9 +200,10 @@ void MjpegHandler (SoupServer        *server,
     info->timeout_id = g_timeout_add (1000,
                                       Jpeger,
                                       info);
-    g_signal_connect (msg, "finished",
+    g_signal_connect (msg,
+                      "finished",
                       G_CALLBACK (MjpegHandlerFinished),
-                      timeout_id);
+                      info);
 }
 
 void WsMessage(SoupWebsocketConnection *connection,
@@ -276,7 +276,7 @@ int main()
     }
     GError *error = NULL;
     soup_server_listen_all (server,
-                            80,
+                            1080,
                             0,
                             &error);
     if (error)

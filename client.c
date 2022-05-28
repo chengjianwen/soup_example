@@ -11,7 +11,7 @@ void DoGet()
 {
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1/get");
+                                         "http://127.0.0.1:1080/get");
     guint code = soup_session_send_message (session,
                                             msg);
     printf ("response status code: %d\n",
@@ -27,24 +27,24 @@ void DoImage()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1/image");
+                                         "http://127.0.0.1:1080/image");
+    GInputStream *stream = soup_session_send(session,
+                                             msg,
+                                             NULL,
+                                            &error);
+    if (error)
+    {
+        fprintf (stderr,
+                 "send request error: %s\n",
+                 error->message);
+        g_error_free (error);
+        error = NULL;
+        goto err_send;
+    }
     goffset count = soup_message_headers_get_content_length(msg->response_headers);
     if (count)
     {
         void *buffer = malloc (count);
-
-        GInputStream *stream = soup_session_send(session,
-                                                 msg,
-                                                 NULL,
-                                                &error);
-        if (error)
-        {
-            fprintf (stderr,
-                     "send request error: %s\n",
-                     error->message);
-            g_error_free (error);
-            error = NULL;
-        }
         g_input_stream_read_all (stream,
                                  buffer,
                                  count,
@@ -60,11 +60,12 @@ void DoImage()
             error = NULL;
         }
 
-        printf ("geg image ok.\n");
+        printf ("get image ok.\n");
         // clean up
         free (buffer);
         g_object_unref (stream);
     }
+err_send:
     g_object_unref (msg);
     g_object_unref (session);
 }
@@ -72,10 +73,6 @@ void DoImage()
 void DoPost(const char *filename)
 {
     GError *error = NULL;
-    SoupSession *session = soup_session_new ();
-    SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1/post");
-
     gchar         *body  = NULL;
     gsize          length;
     g_file_get_contents (filename,
@@ -90,12 +87,17 @@ void DoPost(const char *filename)
                  filename);
         g_error_free (error);
         error = NULL;
+        goto err_file;
     }
+
+    SoupSession *session = soup_session_new ();
+    SoupMessage *msg = soup_message_new ("GET",
+                                         "http://127.0.0.1:1080/post");
     soup_message_set_request (msg,
-                          "image/jpeg",
-                          SOUP_MEMORY_TAKE,
-                          body,
-                          length);
+                              "image/jpeg",
+                              SOUP_MEMORY_TAKE,
+                              body,
+                              length);
     guint code = soup_session_send_message (session,
                                             msg);
     printf ("response status code: %d\n",
@@ -104,6 +106,8 @@ void DoPost(const char *filename)
     // clean up
     g_object_unref (msg);
     g_object_unref (session);
+err_file:
+    return;
 }
 
 /*
@@ -114,7 +118,7 @@ void DoMjpeg ()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1/mjpeg");
+                                         "http://127.0.0.1:1080/mjpeg");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -126,6 +130,7 @@ void DoMjpeg ()
                  error->message);
         g_error_free (error);
         error = NULL;
+        goto err_send;
     }
     SoupMultipartInputStream *multipart = soup_multipart_input_stream_new (msg,
                                                                            stream);
@@ -160,17 +165,20 @@ void DoMjpeg ()
                          error->message);
                 g_error_free (error);
                 error = NULL;
+                goto err_read;
             }
 
             printf ("get image ok.\n");
             g_free (buffer);
         }
+err_read:
         g_object_unref (stream_part);
     }
 
     // clean up
     g_object_unref (multipart);
     g_object_unref (stream);
+err_send:
     g_object_unref (msg);
     g_object_unref (session);
 }
@@ -242,7 +250,7 @@ void PlayMjpeg (GObject      *source_object,
     }
     g_object_unref (multipart);
     g_object_unref (stream);
-    g_main_quit (info->loop);
+    g_main_loop_quit (info->loop);
     free (info);
 }
 
@@ -255,7 +263,7 @@ void DoMjpegAsync()
     GError    *error = NULL;
     info->session    = soup_session_new ();
     info->msg        = soup_message_new ("GET",
-                                         "http://127.0.0.1/mjpeg");
+                                         "http://127.0.0.1:1080/mjpeg");
     soup_session_send_async (info->session,
                              info->msg,
                              NULL,
@@ -342,7 +350,7 @@ void DoWs()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1/ws");
+                                         "http://127.0.0.1:1080/ws");
     soup_session_websocket_connect_async (session,
                                           msg,
                                           NULL,
