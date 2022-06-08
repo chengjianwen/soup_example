@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <libsoup/soup.h>
+#include <opus.h>
+#include <SDL2/SDL.h>
+#include "ws_util.h"
 
 /*
  * 一个基于LibSoup的Web Client例子
@@ -11,7 +14,7 @@ void DoGet()
 {
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/get");
+                                         "http://192.168.1.3:1080/get");
     guint code = soup_session_send_message (session,
                                             msg);
     printf ("response status code: %d\n",
@@ -27,7 +30,7 @@ void DoImage()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/image");
+                                         "http://192.168.1.3:1080/image");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -92,7 +95,7 @@ void DoPost(const char *filename)
 
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/post");
+                                         "http://192.168.1.3:1080/post");
     soup_message_set_request (msg,
                               "image/jpeg",
                               SOUP_MEMORY_TAKE,
@@ -118,7 +121,7 @@ void DoMjpeg ()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/mjpeg");
+                                         "http://192.168.1.3:1080/mjpeg");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -263,7 +266,7 @@ void DoMjpegAsync()
     GError    *error = NULL;
     info->session    = soup_session_new ();
     info->msg        = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/mjpeg");
+                                         "http://192.168.1.3:1080/mjpeg");
     soup_session_send_async (info->session,
                              info->msg,
                              NULL,
@@ -274,47 +277,12 @@ void DoMjpegAsync()
     g_main_loop_run(info->loop);
 }
 
-void WsMessage(SoupWebsocketConnection *connection,
-               gint                     type,
-               GBytes                  *message,
-               gpointer                 user_data)
-{
-    if (type == SOUP_WEBSOCKET_DATA_TEXT)
-        printf ("get a message: %s\n",
-            g_bytes_get_data(message,
-                             NULL));
-    else if (type == SOUP_WEBSOCKET_DATA_BINARY)
-        printf ("get a message\nn");
-    soup_websocket_connection_send_text(connection,
-                                        "Hello Websocket!");
-}
-
-void WsClose (SoupWebsocketConnection *connection,
-              gpointer                 user_data)
-{
-    printf ("Websocket connection closed!\n");
-    guint *timeout_id = (guint *)user_data;
-    g_source_remove (*timeout_id);
-    free (timeout_id);
-    g_object_unref (connection);
-    soup_websocket_connection_close(connection,
-                                    SOUP_WEBSOCKET_CLOSE_NORMAL,
-                                    NULL);
-}
-
-gboolean WsTimer (gpointer data)
-{
-    SoupWebsocketConnection *connection = (SoupWebsocketConnection *)data;
-    soup_websocket_connection_send_text(connection,
-                                        "Hello Websocket!");
-    return TRUE;
-}
-
 void WsReady (GObject *object,
             GAsyncResult *result,
             gpointer user_data)
 {
     GError *error = NULL;
+    WsInfo *info = (WsInfo *)user_data;
     SoupSession *session = (SoupSession *)object;
     SoupWebsocketConnection *connection = soup_session_websocket_connect_finish (session,
                                                                                  result,
@@ -325,42 +293,40 @@ void WsReady (GObject *object,
                  "get connection error: %s\n",
                  error->message);
         g_error_free (error);
-        error = NULL;
     }
-    g_signal_connect (connection,
-                      "message",
-                      G_CALLBACK (WsMessage),
-                      connection);
-    guint *timeout_id = malloc (sizeof (guint));
-    *timeout_id = g_timeout_add (1000,
-                                 WsTimer,
-                                 connection);
-    g_object_ref (connection);
-    g_signal_connect (connection,
-                      "closed",
-                      G_CALLBACK (WsClose),
-                      timeout_id);
+    ConnectionInit (connection,
+                    info->playback_device,
+                    info->capture_device);
+    free (info);
 }
 
 /*
  * WebSocket连接必须通过GMainLoop控制下的异步方式进行连接
  */
-void DoWs()
+void DoWs(const char *playback_device,
+          const char *capture_device)
 {
+    SDL_Init (SDL_INIT_AUDIO);
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/ws");
+                                         "http://192.168.1.4:1080/ws");
+    WsInfo *info = malloc (sizeof (WsInfo));
+    info->playback_device = playback_device;
+    info->capture_device = capture_device;
     soup_session_websocket_connect_async (session,
                                           msg,
                                           NULL,
                                           G_PRIORITY_DEFAULT,
                                           NULL,
                                           WsReady,
-                                          NULL);
+                                          info);
     GMainLoop *loop = g_main_loop_new(NULL,
                                       FALSE);
     g_main_loop_run (loop);
+
+    printf ("Quit!\n");
+    SDL_Quit();
 }
 
 int main(int argc, char *argv[])
@@ -399,7 +365,29 @@ int main(int argc, char *argv[])
     }
     else if (strcmp (argv[1], "ws") == 0)
     {
-        DoWs();
+        if (argc == 4)
+            DoWs(argv[2], argv[3]);
+        else
+        {
+            printf ("Usage: %s %s <playback device> <capture device>\n",
+                    argv[0],
+                    argv[1]); 
+            SDL_Init(SDL_INIT_AUDIO);
+            puts ("录音设备:");
+            for (int i = 0; i < SDL_GetNumAudioDevices(SDL_TRUE); ++i)
+            {
+                puts (SDL_GetAudioDeviceName(i,
+                                             SDL_TRUE));
+            }
+            puts ("");
+            puts ("播放设备:");
+            for (int i = 0; i < SDL_GetNumAudioDevices(SDL_FALSE); ++i)
+            {
+                puts (SDL_GetAudioDeviceName(i,
+                                             SDL_FALSE));
+            }
+            SDL_Quit();
+        }
     }
     else
     {

@@ -1,5 +1,9 @@
 #include <stdio.h>
+#include <opus.h>
+#include <SDL2/SDL.h>
 #include <libsoup/soup.h>
+#include "ws_util.h"
+
 /*
  * 一个基于LibSoup的Web Server例子
  * 参考https://libsoup.org/libsoup-2.4/libsoup-server-howto.html
@@ -206,65 +210,42 @@ void MjpegHandler (SoupServer        *server,
                       info);
 }
 
-void WsMessage(SoupWebsocketConnection *connection,
-               gint                     type,
-               GBytes                  *message,
-               gpointer                 user_data)
-{
-    if (type == SOUP_WEBSOCKET_DATA_TEXT)
-        printf ("get a message: %s\n",
-            g_bytes_get_data(message,
-                             NULL));
-    else if (type == SOUP_WEBSOCKET_DATA_BINARY)
-        printf ("get a message\nn");
-}
-
-void WsClose (SoupWebsocketConnection *connection,
-              gpointer                 user_data)
-{
-    printf ("Websocket connection closed!\n");
-    guint *timeout_id = (guint *)user_data;
-    g_source_remove (*timeout_id);
-    free (timeout_id);
-    g_object_unref (connection);
-    soup_websocket_connection_close(connection,
-                                    SOUP_WEBSOCKET_CLOSE_NORMAL,
-                                    NULL);
-}
-
-gboolean WsTimer (gpointer data)
-{
-    SoupWebsocketConnection *connection = (SoupWebsocketConnection *)data;
-    soup_websocket_connection_send_text(connection,
-                                        "Hello Websocket!");
-    return TRUE;
-}
-
 void WsHandler (SoupServer *server,
                 SoupWebsocketConnection *connection,
                 const char *path,
                 SoupClientContext *client,
                 gpointer user_data)
 {
-    g_signal_connect (connection,
-                      "message",
-                      G_CALLBACK (WsMessage),
-                      NULL);
-    guint *timeout_id = malloc (sizeof (guint));
-    *timeout_id = g_timeout_add (1000,
-                                 WsTimer,
-                                 connection);
-    g_signal_connect (connection,
-                      "closed",
-                      G_CALLBACK (WsClose),
-                      timeout_id);
-
-    // To keep the connection alive, must ref it, or it will be destroyed automatic.
-    g_object_ref (connection);
+    WsInfo *info = (WsInfo *)user_data;
+    ConnectionInit (connection,
+                    info->playback_device,
+                    info->capture_device);
+    free (info);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    if (argc != 3)
+    {
+        printf ("Usage: %s <放音设备> <采音设备>\n",
+                argv[0]);
+        SDL_Init(SDL_INIT_AUDIO);
+        puts ("录音设备:");
+        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_TRUE); ++i)
+        {
+            puts(SDL_GetAudioDeviceName(i,
+                                        SDL_TRUE));
+        }
+        puts ("");
+        puts ("放音设备:");
+        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_FALSE); ++i)
+        {
+            puts(SDL_GetAudioDeviceName(i,
+                                        SDL_FALSE));
+        }
+        SDL_Quit();
+        exit (0);
+    }
     SoupServer *server = soup_server_new(SOUP_SERVER_SERVER_HEADER,
                                          "Soup Example Server",
                                          NULL);
@@ -278,7 +259,7 @@ int main()
     soup_server_listen_all (server,
                             1080,
                             0,
-                            &error);
+                           &error);
     if (error)
     {
         fprintf (stderr,
@@ -307,12 +288,15 @@ int main()
                             MjpegHandler,
                             NULL,
                             NULL);
+    WsInfo *info = malloc (sizeof (WsInfo));
+    info->playback_device = argv[1];
+    info->capture_device = argv[2];
     soup_server_add_websocket_handler (server,
                                        "/ws",
                                        NULL,
                                        NULL,
                                        WsHandler,
-                                       NULL,
+                                       info,
                                        NULL);
 
     GMainLoop *loop =  g_main_loop_new(NULL,
