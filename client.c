@@ -14,7 +14,7 @@ void DoGet()
 {
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://192.168.1.3:1080/get");
+                                         "http://127.0.0.1:1080/get");
     guint code = soup_session_send_message (session,
                                             msg);
     printf ("response status code: %d\n",
@@ -30,7 +30,7 @@ void DoImage()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://192.168.1.3:1080/image");
+                                         "http://127.0.0.1:1080/image");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -95,7 +95,7 @@ void DoPost(const char *filename)
 
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://192.168.1.3:1080/post");
+                                         "http://127.0.0.1:1080/post");
     soup_message_set_request (msg,
                               "image/jpeg",
                               SOUP_MEMORY_TAKE,
@@ -121,7 +121,7 @@ void DoMjpeg ()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://192.168.1.3:1080/mjpeg");
+                                         "http://127.0.0.1:1080/mjpeg");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -266,7 +266,7 @@ void DoMjpegAsync()
     GError    *error = NULL;
     info->session    = soup_session_new ();
     info->msg        = soup_message_new ("GET",
-                                         "http://192.168.1.3:1080/mjpeg");
+                                         "http://127.0.0.1:1080/mjpeg");
     soup_session_send_async (info->session,
                              info->msg,
                              NULL,
@@ -310,14 +310,14 @@ void DoWs(const char *playback_device,
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://192.168.1.4:1080/ws");
+                                         "http://127.0.0.1:1080/ws");
     WsInfo *info = malloc (sizeof (WsInfo));
     info->playback_device = playback_device;
     info->capture_device = capture_device;
     soup_session_websocket_connect_async (session,
                                           msg,
                                           NULL,
-                                          G_PRIORITY_DEFAULT,
+                                          NULL,
                                           NULL,
                                           WsReady,
                                           info);

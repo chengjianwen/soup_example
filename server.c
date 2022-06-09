@@ -302,6 +302,7 @@ int main(int argc, char *argv[])
     GMainLoop *loop =  g_main_loop_new(NULL,
                                        FALSE);
     g_main_loop_run(loop);
+    puts ("HERE");
 
     // clean up
     g_main_loop_unref(loop);

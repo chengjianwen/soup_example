@@ -20,19 +20,23 @@ void WsMessage(SoupWebsocketConnection *connection,
         g_bytes_unref (g_async_queue_pop_unlocked (queue));
     g_async_queue_push_unlocked (queue,
                                  message);
-    g_async_queue_unlock (queue);
     g_bytes_ref (message);
+    g_async_queue_unlock (queue);
 }
 
 void WsClose (SoupWebsocketConnection *connection,
               gpointer                 user_data)
 {
-    g_object_unref (connection);
+    SDL_CloseAudioDevice(playback_id);
+    puts ("关闭放音设备");
+    SDL_CloseAudioDevice(capture_id);
+    puts ("关闭采音设备");
     opus_encoder_destroy (encoder);
     opus_decoder_destroy (decoder);
+    while (g_async_queue_length(queue))
+        g_bytes_unref (g_async_queue_pop (queue));
     g_async_queue_unref (queue);
-    SDL_CloseAudioDevice(playback_id);
-    SDL_CloseAudioDevice(capture_id);
+    g_object_unref (connection);
     SDL_Quit();
 }
 
@@ -40,13 +44,14 @@ void PlayAudio (void  *userdata,
                 Uint8 *stream,
                 int    len)
 {
+    SDL_memset (stream, '\0', len);
     GBytes *buffer = NULL;
     g_async_queue_lock(queue);
     if (g_async_queue_length_unlocked (queue))
         buffer = g_async_queue_pop_unlocked (queue);
     g_async_queue_unlock(queue);
     if (buffer)
-    { 
+    {
         float *pcm = (float *)malloc(len);
     
         int size = opus_decode_float (decoder,
@@ -145,11 +150,12 @@ void ConnectionInit (SoupWebsocketConnection *connection,
                      const char *playback_device,
                      const char *capture_device)
 {
+    SDL_Init (SDL_INIT_AUDIO);
     SDL_zero(spec);
     spec.freq = 16000;
     spec.format = AUDIO_F32SYS;
     spec.channels = 1;
-    spec.samples = spec.freq / 1000 * 2.5;
+    spec.samples = spec.freq / 1000 * 20;
     spec.callback = PlayAudio;
 
     playback_id = SDL_OpenAudioDevice(playback_device,
