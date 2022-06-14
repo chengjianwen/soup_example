@@ -16,7 +16,7 @@ void WsMessage(SoupWebsocketConnection *connection,
                gpointer                 user_data)
 {
     g_async_queue_lock (queue);
-    if (g_async_queue_length_unlocked (queue) > 100)
+    if (g_async_queue_length_unlocked (queue) > 1000)
         g_bytes_unref (g_async_queue_pop_unlocked (queue));
     g_async_queue_push_unlocked (queue,
                                  message);
@@ -111,10 +111,18 @@ void CaptAudio (void  *userdata,
                                     len);
     if (size > 0)
     {
-        if (SOUP_WEBSOCKET_STATE_OPEN == soup_websocket_connection_get_state (connection))
+        if (SOUP_WEBSOCKET_STATE_OPEN == soup_websocket_connection_get_state (connection)
+/*
+ * 如果没有采集到样本数据，则编码后的数据长度为8
+ * 这里的判断表示没有采集到数据时，则不进行数据发送，这样可以节省一些带宽       
+ * 该值会随着freq、sample的值而变化，具体需要测试来确定
+ */
+        && size > 8)
+        {
             soup_websocket_connection_send_binary (connection,
                                                    encoded,
                                                    size);
+        }
     }
     else
     {
@@ -191,7 +199,7 @@ void ConnectionInit (SoupWebsocketConnection *connection,
 
     encoder = opus_encoder_create(spec.freq,
                                   spec.channels,
-                                  OPUS_APPLICATION_AUDIO,
+                                  OPUS_APPLICATION_VOIP,
                                   NULL);
     decoder = opus_decoder_create(spec.freq,
                                   spec.channels,

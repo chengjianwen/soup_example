@@ -220,7 +220,6 @@ void WsHandler (SoupServer *server,
     ConnectionInit (connection,
                     info->playback_device,
                     info->capture_device);
-    free (info);
 }
 
 int main(int argc, char *argv[])
@@ -230,21 +229,21 @@ int main(int argc, char *argv[])
         printf ("Usage: %s <放音设备> <采音设备>\n",
                 argv[0]);
         SDL_Init(SDL_INIT_AUDIO);
-        puts ("录音设备:");
-        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_TRUE); ++i)
-        {
-            puts(SDL_GetAudioDeviceName(i,
-                                        SDL_TRUE));
-        }
-        puts ("");
         puts ("放音设备:");
-        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_FALSE); ++i)
+        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_TRUE); ++i)
         {
             puts(SDL_GetAudioDeviceName(i,
                                         SDL_FALSE));
         }
+        puts ("");
+        puts ("采音设备:");
+        for (int i = 0; i < SDL_GetNumAudioDevices(SDL_FALSE); ++i)
+        {
+            puts(SDL_GetAudioDeviceName(i,
+                                        SDL_TRUE));
+        }
         SDL_Quit();
-        exit (0);
+        goto err_usage;
     }
     SoupServer *server = soup_server_new(SOUP_SERVER_SERVER_HEADER,
                                          "Soup Example Server",
@@ -254,6 +253,7 @@ int main(int argc, char *argv[])
     {
         fprintf (stderr,
                  "Error on SoupServer new.\n");
+        goto err_server;
     }
     GError *error = NULL;
     soup_server_listen_all (server,
@@ -267,6 +267,7 @@ int main(int argc, char *argv[])
                  error->message);
         g_error_free (error);
         error = NULL;
+        goto err_listen;
     }
     soup_server_add_handler(server,
                             "/get",
@@ -288,6 +289,9 @@ int main(int argc, char *argv[])
                             MjpegHandler,
                             NULL,
                             NULL);
+/*
+ * WsInfo的内容包括放音设备和采音设备
+ */
     WsInfo *info = malloc (sizeof (WsInfo));
     info->playback_device = argv[1];
     info->capture_device = argv[2];
@@ -302,10 +306,24 @@ int main(int argc, char *argv[])
     GMainLoop *loop =  g_main_loop_new(NULL,
                                        FALSE);
     g_main_loop_run(loop);
-    puts ("HERE");
 
     // clean up
+    soup_server_remove_handler (server,
+                                "/ws");
+    free (info);
+    soup_server_remove_handler (server,
+                                "/mjpeg");
+    soup_server_remove_handler (server,
+                                "/post");
+    soup_server_remove_handler (server,
+                                "/image");
+    soup_server_remove_handler (server,
+                                "/get");
     g_main_loop_unref(loop);
+
+err_listen:
     g_object_unref(server);
+err_server:
+err_usage:
     return 0;
 }

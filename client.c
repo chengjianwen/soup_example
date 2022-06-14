@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <libsoup/soup.h>
 #include <opus.h>
 #include <SDL2/SDL.h>
@@ -14,7 +14,7 @@ void DoGet()
 {
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/get");
+                                         "http://172.16.1.53:1080/get");
     guint code = soup_session_send_message (session,
                                             msg);
     printf ("response status code: %d\n",
@@ -30,7 +30,7 @@ void DoImage()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/image");
+                                         "http://172.16.1.53:1080/image");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -95,7 +95,7 @@ void DoPost(const char *filename)
 
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/post");
+                                         "http://172.16.1.53:1080/post");
     soup_message_set_request (msg,
                               "image/jpeg",
                               SOUP_MEMORY_TAKE,
@@ -121,7 +121,7 @@ void DoMjpeg ()
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/mjpeg");
+                                         "http://172.16.1.53:1080/mjpeg");
     GInputStream *stream = soup_session_send(session,
                                              msg,
                                              NULL,
@@ -266,14 +266,14 @@ void DoMjpegAsync()
     GError    *error = NULL;
     info->session    = soup_session_new ();
     info->msg        = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/mjpeg");
+                                         "http://172.16.1.53:1080/mjpeg");
     soup_session_send_async (info->session,
                              info->msg,
                              NULL,
                              PlayMjpeg,
                              info);
     info->loop = g_main_loop_new (NULL,
-                                  FALSE);
+                                  TRUE);
     g_main_loop_run(info->loop);
 }
 
@@ -293,11 +293,19 @@ void WsReady (GObject *object,
                  "get connection error: %s\n",
                  error->message);
         g_error_free (error);
+	goto err_connection;
+    }
+    if (!connection)
+    {
+        fputs ("无法连接\n",
+               stderr);
+	goto err_connection;
     }
     ConnectionInit (connection,
                     info->playback_device,
                     info->capture_device);
-    free (info);
+err_connection:
+    return;
 }
 
 /*
@@ -310,7 +318,7 @@ void DoWs(const char *playback_device,
     GError *error = NULL;
     SoupSession *session = soup_session_new ();
     SoupMessage *msg = soup_message_new ("GET",
-                                         "http://127.0.0.1:1080/ws");
+                                         "http://172.16.1.53:1080/ws");
     WsInfo *info = malloc (sizeof (WsInfo));
     info->playback_device = playback_device;
     info->capture_device = capture_device;
@@ -322,9 +330,10 @@ void DoWs(const char *playback_device,
                                           WsReady,
                                           info);
     GMainLoop *loop = g_main_loop_new(NULL,
-                                      FALSE);
+                                      TRUE);
     g_main_loop_run (loop);
 
+    free (info);
     printf ("Quit!\n");
     SDL_Quit();
 }
